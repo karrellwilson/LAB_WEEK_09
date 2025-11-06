@@ -29,6 +29,14 @@ import com.example.lab_week_09.ui.theme.LAB_WEEK_09Theme
 import com.example.lab_week_09.ui.theme.OnBackgroundItemText
 import com.example.lab_week_09.ui.theme.OnBackgroundTitleText
 import com.example.lab_week_09.ui.theme.PrimaryTextButton
+// IMPORT BARU UNTUK MOSHI (BONUS)
+import com.squareup.moshi.JsonAdapter
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+// IMPORT BARU UNTUK URL ENCODING (BONUS)
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,7 +47,6 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // Step 5: Buat NavController dan panggil App
                     val navController = rememberNavController()
                     App(navController = navController)
                 }
@@ -48,35 +55,33 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Step 4: Composable baru untuk NavHost (root aplikasi)
 @Composable
 fun App(navController: NavHostController) {
     NavHost(navController = navController, startDestination = "home") {
 
-        // Rute untuk layar "home"
         composable("home") {
             Home (
-                navigateFromHomeToResult = { listDataString ->
-                    // Aksi navigasi: kirim data ke rute "resultContent"
-                    navController.navigate("resultContent/$listDataString")
+                navigateFromHomeToResult = { listDataJson ->
+                    // --- PERUBAHAN (BONUS) ---
+                    // Encode JSON agar aman dikirim sebagai URL
+                    val encodedJson = URLEncoder.encode(listDataJson, StandardCharsets.UTF_8.toString())
+                    navController.navigate("resultContent/$encodedJson")
                 }
             )
         }
 
-        // Rute untuk layar "resultContent"
         composable(
             "resultContent/{listData}",
             arguments = listOf(navArgument("listData") { type = NavType.StringType })
         ) {
-            // Ambil data yang dikirim
             ResultContent(
+                // getString() otomatis URL-decode, jadi kita dapat JSON-nya
                 listData = it.arguments?.getString("listData").orEmpty()
             )
         }
     }
 }
 
-// Step 6: Tambah parameter navigasi
 @Composable
 fun Home(navigateFromHomeToResult: (String) -> Unit) {
     val listData = remember {
@@ -88,6 +93,14 @@ fun Home(navigateFromHomeToResult: (String) -> Unit) {
     }
     val inputField = remember { mutableStateOf(Student("")) }
 
+    // --- PERUBAHAN (BONUS) ---
+    // Siapkan Moshi untuk konversi ke JSON
+    val moshi = Moshi.Builder()
+        .add(KotlinJsonAdapterFactory())
+        .build()
+    val listType = Types.newParameterizedType(List::class.java, Student::class.java)
+    val jsonAdapter: JsonAdapter<List<Student>> = moshi.adapter(listType)
+
     HomeContent(
         listData = listData,
         inputField = inputField.value,
@@ -95,26 +108,28 @@ fun Home(navigateFromHomeToResult: (String) -> Unit) {
             inputField.value = inputField.value.copy(name = newName)
         },
         onButtonClick = {
+            // TUGAS 1: Cek isNotBlank() sudah ada di sini
             if (inputField.value.name.isNotBlank()) {
                 listData.add(inputField.value)
                 inputField.value = Student("")
             }
         },
-        // Step 8: Kirim data list saat navigasi
         navigateFromHomeToResult = {
-            navigateFromHomeToResult(listData.toList().toString())
+            // --- PERUBAHAN (BONUS) ---
+            // Kirim data sebagai JSON string, bukan list.toString()
+            val jsonString = jsonAdapter.toJson(listData.toList())
+            navigateFromHomeToResult(jsonString)
         }
     )
 }
 
-// Step 7: Tambah parameter navigasi
 @Composable
 fun HomeContent(
     listData: SnapshotStateList<Student>,
     inputField: Student,
     onInputValueChange: (String) -> Unit,
     onButtonClick: () -> Unit,
-    navigateFromHomeToResult: () -> Unit // Parameter baru
+    navigateFromHomeToResult: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -130,7 +145,6 @@ fun HomeContent(
             modifier = Modifier.padding(vertical = 8.dp)
         )
 
-        // Step 9: Buat Row untuk dua tombol
         Row {
             PrimaryTextButton(
                 text = stringResource(id = R.string.button_click),
@@ -138,7 +152,7 @@ fun HomeContent(
             )
             PrimaryTextButton(
                 text = stringResource(id = R.string.button_navigate),
-                onClick = { navigateFromHomeToResult() } // Panggil navigasi
+                onClick = { navigateFromHomeToResult() }
             )
         }
 
@@ -155,16 +169,41 @@ fun HomeContent(
     }
 }
 
-// Step 10: Composable baru untuk layar hasil
+// --- PERUBAHAN BESAR (BONUS) ---
 @Composable
-fun ResultContent(listData: String) {
+fun ResultContent(listData: String) { // listData sekarang adalah JSON String
+
+    // 1. Siapkan Moshi untuk mem-parsing JSON
+    val moshi = Moshi.Builder()
+        .add(KotlinJsonAdapterFactory())
+        .build()
+    val listType = Types.newParameterizedType(List::class.java, Student::class.java)
+    val jsonAdapter: JsonAdapter<List<Student>> = moshi.adapter(listType)
+
+    // 2. Parse JSON kembali menjadi List<Student>
+    val studentList = listData.let {
+        jsonAdapter.fromJson(it)
+    }.orEmpty()
+
+    // 3. Tampilkan dengan LazyColumn (mirip HomeContent)
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(vertical = 4.dp),
+            .padding(16.dp), // Beri padding agar rapi
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        OnBackgroundItemText(text = listData)
+        OnBackgroundTitleText(text = "Submitted Data") // Judul Halaman
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            items(studentList) { item ->
+                OnBackgroundItemText(text = item.name)
+            }
+        }
     }
 }
 
@@ -172,7 +211,6 @@ fun ResultContent(listData: String) {
 @Composable
 fun PreviewHome() {
     LAB_WEEK_09Theme {
-        // Perlu di-update untuk panggil Home dengan parameter
         Home(navigateFromHomeToResult = {})
     }
 }
