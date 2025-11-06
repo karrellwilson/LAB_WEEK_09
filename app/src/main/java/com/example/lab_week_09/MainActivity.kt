@@ -15,13 +15,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.lab_week_09.ui.theme.LAB_WEEK_09Theme
-// IMPORT BARU DARI PART 3
 import com.example.lab_week_09.ui.theme.OnBackgroundItemText
 import com.example.lab_week_09.ui.theme.OnBackgroundTitleText
 import com.example.lab_week_09.ui.theme.PrimaryTextButton
@@ -35,15 +39,46 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    Home()
+                    // Step 5: Buat NavController dan panggil App
+                    val navController = rememberNavController()
+                    App(navController = navController)
                 }
             }
         }
     }
 }
 
+// Step 4: Composable baru untuk NavHost (root aplikasi)
 @Composable
-fun Home() {
+fun App(navController: NavHostController) {
+    NavHost(navController = navController, startDestination = "home") {
+
+        // Rute untuk layar "home"
+        composable("home") {
+            Home (
+                navigateFromHomeToResult = { listDataString ->
+                    // Aksi navigasi: kirim data ke rute "resultContent"
+                    navController.navigate("resultContent/$listDataString")
+                }
+            )
+        }
+
+        // Rute untuk layar "resultContent"
+        composable(
+            "resultContent/{listData}",
+            arguments = listOf(navArgument("listData") { type = NavType.StringType })
+        ) {
+            // Ambil data yang dikirim
+            ResultContent(
+                listData = it.arguments?.getString("listData").orEmpty()
+            )
+        }
+    }
+}
+
+// Step 6: Tambah parameter navigasi
+@Composable
+fun Home(navigateFromHomeToResult: (String) -> Unit) {
     val listData = remember {
         mutableStateListOf(
             Student("Tanu"),
@@ -51,7 +86,6 @@ fun Home() {
             Student("Tono")
         )
     }
-
     val inputField = remember { mutableStateOf(Student("")) }
 
     HomeContent(
@@ -65,23 +99,28 @@ fun Home() {
                 listData.add(inputField.value)
                 inputField.value = Student("")
             }
+        },
+        // Step 8: Kirim data list saat navigasi
+        navigateFromHomeToResult = {
+            navigateFromHomeToResult(listData.toList().toString())
         }
     )
 }
 
+// Step 7: Tambah parameter navigasi
 @Composable
 fun HomeContent(
     listData: SnapshotStateList<Student>,
     inputField: Student,
     onInputValueChange: (String) -> Unit,
-    onButtonClick: () -> Unit
+    onButtonClick: () -> Unit,
+    navigateFromHomeToResult: () -> Unit // Parameter baru
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        // --- DIGANTI (PART 3) ---
         OnBackgroundTitleText(text = stringResource(id = R.string.enter_item))
 
         TextField(
@@ -91,11 +130,17 @@ fun HomeContent(
             modifier = Modifier.padding(vertical = 8.dp)
         )
 
-        // --- DIGANTI (PART 3) ---
-        PrimaryTextButton(
-            text = stringResource(id = R.string.button_click),
-            onClick = { onButtonClick() }
-        )
+        // Step 9: Buat Row untuk dua tombol
+        Row {
+            PrimaryTextButton(
+                text = stringResource(id = R.string.button_click),
+                onClick = { onButtonClick() }
+            )
+            PrimaryTextButton(
+                text = stringResource(id = R.string.button_navigate),
+                onClick = { navigateFromHomeToResult() } // Panggil navigasi
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -104,10 +149,22 @@ fun HomeContent(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             items(listData) { item ->
-                // --- DIGANTI (PART 3) ---
                 OnBackgroundItemText(text = item.name)
             }
         }
+    }
+}
+
+// Step 10: Composable baru untuk layar hasil
+@Composable
+fun ResultContent(listData: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        OnBackgroundItemText(text = listData)
     }
 }
 
@@ -115,7 +172,8 @@ fun HomeContent(
 @Composable
 fun PreviewHome() {
     LAB_WEEK_09Theme {
-        Home()
+        // Perlu di-update untuk panggil Home dengan parameter
+        Home(navigateFromHomeToResult = {})
     }
 }
 
